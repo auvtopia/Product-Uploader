@@ -1,0 +1,152 @@
+const https = require('https');
+
+const devProducts = [
+    { name: "Ash", price: 75, description: "Bronze Creation" },
+    { name: "Starter", price: 15, description: "Bronze Creation" },
+    { name: "Basic", price: 25, description: "Bronze Creation" },
+    { name: "Bronze", price: 35, description: "Bronze Creation" },
+    { name: "Silver", price: 50, description: "Bronze Creation" },
+    { name: "Gold", price: 75, description: "Bronze Creation" },
+    { name: "Diamond", price: 100, description: "Bronze Creation" },
+    { name: "Shiny", price: 30, description: "Bronze Creation" },
+    { name: "EXP1", price: 15, description: "Bronze Creation" },
+    { name: "EXP2", price: 25, description: "Bronze Creation" },
+    { name: "Hatch1", price: 15, description: "Bronze Creation" },
+    { name: "Hatch2", price: 25, description: "Bronze Creation" },
+    { name: "PokeDollars1", price: 20, description: "Bronze Creation" },
+    { name: "PokeDollars2", price: 35, description: "Bronze Creation" },
+    { name: "EVs1", price: 15, description: "Bronze Creation" },
+    { name: "EVs2", price: 25, description: "Bronze Creation" },
+    { name: "Legendaries", price: 45, description: "Bronze Creation" },
+    { name: "HoverBoard", price: 15, description: "Bronze Creation" },
+    { name: "MasterBall", price: 15, description: "Bronze Creation" },
+    { name: "Lotto", price: 35, description: "Bronze Creation" }
+];
+
+function httpRequest(options) {
+    return new Promise((resolve, reject) => {
+        const req = https.request(options, (res) => {
+            let responseData = '';
+            res.on('data', (chunk) => {
+                responseData += chunk;
+            });
+            res.on('end', () => {
+                resolve({ statusCode: res.statusCode, data: responseData, headers: res.headers });
+            });
+        });
+
+        req.on('error', (error) => {
+            reject(error);
+        });
+
+        if (options.body) {
+            req.write(options.body);
+        }
+        req.end();
+    });
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function getXCSRFToken(cookie) {
+    const response = await httpRequest({
+        hostname: 'auth.roblox.com',
+        path: '/v2/logout',
+        method: 'POST',
+        headers: {
+            'Cookie': `.ROBLOSECURITY=${cookie}`
+        }
+    });
+    return response.headers['x-csrf-token'];
+}
+
+async function addDeveloperProduct(cookie, universeId, name, priceInRobux, description) {
+    const xcsrfToken = await getXCSRFToken(cookie);
+
+    const requestData = {
+        name: name,
+        description: description,
+        priceInRobux: priceInRobux
+    };
+
+    console.log("Sending request data:", requestData);
+
+    const response = await httpRequest({
+        hostname: 'apis.roblox.com',
+        path: `/developer-products/v1/universes/${universeId}/developerproducts?name=${encodeURIComponent(name)}&description=${encodeURIComponent(description)}&priceInRobux=${priceInRobux}`,
+        method: 'POST',
+        headers: {
+            'Cookie': `.ROBLOSECURITY=${cookie}`,
+            'X-CSRF-TOKEN': xcsrfToken,
+            'Content-Type': 'application/json'
+        }
+    });
+
+    if (response.statusCode === 200) {
+        console.log(`Uploaded ${name} with ID ${JSON.parse(response.data).id}`);
+        return JSON.parse(response.data);
+    } else {
+        console.error(`Failed to upload product ${name}. Status: ${response.statusCode}, Response: ${response.data}`);
+        return null;
+    }
+}
+
+async function getCurrentUser(jar) {
+    const options = {
+        hostname: 'www.roblox.com',
+        path: '/mobileapi/userinfo',
+        method: 'GET',
+        headers: {
+            'Cookie': `.ROBLOSECURITY=${jar}`
+        }
+    };
+
+    const response = await httpRequest(options);
+
+    if (response.statusCode !== 200) {
+        throw new Error('You are not logged in.');
+    }
+
+    return JSON.parse(response.data);
+}
+
+async function main() {
+    const cookie = 'putyourcookiehere'; // Replace 'putyourcookiehere' with your actual Roblox cookie
+    const uid = 'UniverseIDHere'; // Replace 'UniverseIDHere' with your UID, found in Studio
+
+    try {
+        const currentUser = await getCurrentUser(cookie);
+        console.log("Logged in as:", currentUser.UserName);
+
+        for (const product of devProducts) {
+            await addDeveloperProduct(cookie, uid, product.name, product.price, product.description);
+            await delay(1000);
+        }
+
+        displayAsciiArt();
+    } catch (error) {
+        console.error(error.message);
+    }
+}
+
+function displayAsciiArt() {
+    console.log(`
+███╗   ███╗ █████╗ ██████╗ ███████╗    ██████╗ ██╗   ██╗
+████╗ ████║██╔══██╗██╔══██╗██╔════╝    ██╔══██╗╚██╗ ██╔╝
+██╔████╔██║███████║██║  ██║█████╗      ██████╔╝ ╚████╔╝ 
+██║╚██╔╝██║██╔══██║██║  ██║██╔══╝      ██╔══██╗  ╚██╔╝  
+██║ ╚═╝ ██║██║  ██║██████╔╝███████╗    ██████╔╝   ██║   
+╚═╝     ╚═╝╚═╝  ╚═╝╚═════╝ ╚══════╝    ╚═════╝    ╚═╝   
+                                                        
+ █████╗ ██╗   ██╗██╗   ██╗       ██╗                    
+██╔══██╗██║   ██║██║   ██║    ██╗╚██╗                   
+███████║██║   ██║██║   ██║    ╚═╝ ██║                   
+██╔══██║██║   ██║╚██╗ ██╔╝    ██╗ ██║                   
+██║  ██║╚██████╔╝ ╚████╔╝     ╚═╝██╔╝                   
+╚═╝  ╚═╝ ╚═════╝   ╚═══╝         ╚═╝                     
+    `);
+}
+
+main();
